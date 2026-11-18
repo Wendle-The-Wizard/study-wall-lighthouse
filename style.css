@@ -1,3 +1,4 @@
 /* Wendle's study wall: the canvas simply fills the page */
 html, body { margin: 0; height: 100%; background: #120d0a; overflow: hidden; }
-canvas { display: block; width: 100vw; height: 100vh; }
+canvas { display: block; width: 100vw; height: 100vh; cursor: pointer; touch-action: manipulation; }
+#hint { position: fixed; left: 0; right: 0; bottom: 14px; text-align: center; font: 14px Georgia, serif; color: rgba(255,220,160,0.7); pointer-events: none; text-shadow: 0 1px 3px #000; }
