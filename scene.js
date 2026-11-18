@@ -1,27 +1,41 @@
-// Step 3: dust motes drift in the light. The lens now turns so you can see it sweep.
+// Step 4: a click changes the beam's speed. Motes are now bigger and more plentiful.
 const canvas = document.getElementById('scene');
 const ctx = canvas.getContext('2d');
+const hint = document.getElementById('hint');
 
 let w = 0, h = 0, dpr = 1;
-let wallLayer = null; // wall is drawn once and reused
-let angle = -0.5;     // where the beam points, in radians
+let wallLayer = null;
+let angle = -0.5;
 let lastTime = null;
-const SPEED = 0.8;    // radians per second
-const HALF = 0.16;    // half-width of the beam cone
+// speeds to cycle through on each click (radians per second)
+const SPEEDS = [0.8, 1.6, 3.0, 0.3];
+let speedIndex = 0;
+let speed = SPEEDS[0];      // the current, smoothly changing speed
+const HALF = 0.16;
 const TAU = Math.PI * 2;
 
 // dust motes live in 0..1 space so they survive resizing
 const motes = [];
-for (let i = 0; i < 90; i++) {
+for (let i = 0; i < 220; i++) {
   motes.push({
     x: Math.random(), y: Math.random(),
-    vx: (Math.random() - 0.5) * 0.012,
-    vy: -0.004 - Math.random() * 0.01,   // they float gently upward
-    size: 0.8 + Math.random() * 1.8,
+    vx: (Math.random() - 0.5) * 0.02,
+    vy: -0.01 - Math.random() * 0.025,
+    size: 1.4 + Math.random() * 2.4,
     phase: Math.random() * TAU,
-    wob: 0.003 + Math.random() * 0.008
+    wob: 0.005 + Math.random() * 0.012
   });
 }
+
+// a click or tap moves to the next speed
+function nextSpeed() {
+  speedIndex = (speedIndex + 1) % SPEEDS.length;
+  hint.textContent = 'beam speed ' + (speedIndex + 1) + ' of ' + SPEEDS.length + ' - click again';
+}
+canvas.addEventListener('pointerdown', nextSpeed);
+window.addEventListener('keydown', function (e) {
+  if (e.key === ' ' || e.key === 'Enter') nextSpeed();
+});
 
 function resize() {
   dpr = window.devicePixelRatio || 1;
@@ -62,7 +76,6 @@ function drawVignette() {
   ctx.fillRect(0, 0, w, h);
 }
 
-// a soft cone of warm light starting at the lens; strength dims the back beam
 function drawBeam(cx, cy, a, strength) {
   const len = Math.hypot(w, h);
   ctx.save();
@@ -92,7 +105,6 @@ function drawBeam(cx, cy, a, strength) {
   ctx.restore();
 }
 
-// smallest difference between two angles
 function angDiff(a, b) {
   let d = (a - b) % TAU;
   if (d > Math.PI) d -= TAU;
@@ -100,7 +112,6 @@ function angDiff(a, b) {
   return d;
 }
 
-// how much light reaches a point (0..1), from the front and the dimmer back beam
 function lightAt(x, y, cx, cy) {
   const a = Math.atan2(y - cy, x - cx);
   const front = Math.max(0, 1 - Math.abs(angDiff(a, angle)) / (HALF * 1.3));
@@ -110,7 +121,7 @@ function lightAt(x, y, cx, cy) {
 
 function updateMotes(dt, t) {
   for (const m of motes) {
-    m.x += (m.vx + Math.sin(t / 1500 + m.phase) * m.wob) * dt;
+    m.x += (m.vx + Math.sin(t / 1200 + m.phase) * m.wob) * dt;
     m.y += m.vy * dt;
     if (m.x < -0.02) m.x += 1.04;
     if (m.x > 1.02) m.x -= 1.04;
@@ -118,17 +129,17 @@ function updateMotes(dt, t) {
   }
 }
 
-// motes are barely there in the dark and sparkle when the beam finds them
+// motes are faintly visible in the dark and sparkle when the beam finds them
 function drawMotes(cx, cy) {
   for (const m of motes) {
     const x = m.x * w, y = m.y * h;
     const k = lightAt(x, y, cx, cy);
-    const alpha = 0.06 + k * 0.85;
-    const s = m.size * (1 + k * 0.6);
+    const alpha = 0.18 + k * 0.82;
+    const s = m.size * (1 + k * 0.7);
     if (k > 0.05) {
-      ctx.fillStyle = 'rgba(255,210,140,' + (k * 0.15) + ')';
+      ctx.fillStyle = 'rgba(255,210,140,' + (k * 0.25) + ')';
       ctx.beginPath();
-      ctx.arc(x, y, s * 3, 0, TAU);
+      ctx.arc(x, y, s * 3.2, 0, TAU);
       ctx.fill();
     }
     ctx.fillStyle = 'rgba(255,236,190,' + alpha + ')';
@@ -138,7 +149,6 @@ function drawMotes(cx, cy) {
   }
 }
 
-// the lens: a brass lantern ring with glass panels that turn with the beam
 function drawLens(cx, cy, r, a) {
   ctx.fillStyle = 'rgba(0,0,0,0.35)';
   ctx.beginPath();
@@ -154,13 +164,11 @@ function drawLens(cx, cy, r, a) {
   ctx.arc(cx, cy, r, 0, TAU);
   ctx.fill();
 
-  // dark inside of the lantern
   ctx.fillStyle = '#1b130a';
   ctx.beginPath();
   ctx.arc(cx, cy, r * 0.82, 0, TAU);
   ctx.fill();
 
-  // four glass panels that rotate: the front one blazes, the back one glows less
   const glows = [1, 0.25, 0.5, 0.25];
   for (let i = 0; i < 4; i++) {
     const pa = a + i * Math.PI / 2;
@@ -174,7 +182,6 @@ function drawLens(cx, cy, r, a) {
     ctx.arc(cx, cy, r * 0.78, pa - 0.65, pa + 0.65);
     ctx.closePath();
     ctx.fill();
-    // Fresnel ridges, little arcs across the panel
     ctx.strokeStyle = 'rgba(90,55,10,0.55)';
     ctx.lineWidth = r * 0.02;
     for (const k of [0.35, 0.5, 0.65]) {
@@ -182,7 +189,6 @@ function drawLens(cx, cy, r, a) {
       ctx.arc(cx, cy, r * k, pa - 0.65, pa + 0.65);
       ctx.stroke();
     }
-    // brass divider between panels
     ctx.strokeStyle = '#b88a30';
     ctx.lineWidth = r * 0.05;
     ctx.beginPath();
@@ -191,19 +197,16 @@ function drawLens(cx, cy, r, a) {
     ctx.stroke();
   }
 
-  // bright spot on the front panel so the turning is easy to see
   ctx.fillStyle = 'rgba(255,250,220,0.85)';
   ctx.beginPath();
   ctx.arc(cx + Math.cos(a) * r * 0.55, cy + Math.sin(a) * r * 0.55, r * 0.09, 0, TAU);
   ctx.fill();
 
-  // brass hub in the middle
   ctx.fillStyle = brass;
   ctx.beginPath();
   ctx.arc(cx, cy, r * 0.14, 0, TAU);
   ctx.fill();
 
-  // outer rim
   ctx.strokeStyle = '#4a3410';
   ctx.lineWidth = r * 0.04;
   ctx.beginPath();
@@ -218,12 +221,13 @@ function drawLens(cx, cy, r, a) {
   }
 }
 
-// every frame: wall, beams, motes, vignette, lens on top
 function frame(t) {
   if (lastTime === null) lastTime = t;
-  const dt = Math.min(0.1, (t - lastTime) / 1000); // clamp so a hidden tab doesn't jump
+  const dt = Math.min(0.1, (t - lastTime) / 1000);
   lastTime = t;
-  angle = (angle + SPEED * dt) % TAU;
+  // ease toward the chosen speed so a click feels smooth, not jerky
+  speed += (SPEEDS[speedIndex] - speed) * Math.min(1, dt * 3);
+  angle = (angle + speed * dt) % TAU;
   updateMotes(dt, t);
 
   ctx.setTransform(1, 0, 0, 1, 0, 0);
