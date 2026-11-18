@@ -1,0 +1,3 @@
+/* Wendle's study wall: the canvas simply fills the page */
+html, body { margin: 0; height: 100%; background: #120d0a; overflow: hidden; }
+canvas { display: block; width: 100vw; height: 100vh; }
