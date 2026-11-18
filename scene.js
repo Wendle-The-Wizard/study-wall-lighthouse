@@ -1,4 +1,4 @@
-// Step 4: a click changes the beam's speed. Motes are now bigger and more plentiful.
+// Step 5: a gentle lamp hum, started on the first click (browsers need that).
 const canvas = document.getElementById('scene');
 const ctx = canvas.getContext('2d');
 const hint = document.getElementById('hint');
@@ -7,14 +7,56 @@ let w = 0, h = 0, dpr = 1;
 let wallLayer = null;
 let angle = -0.5;
 let lastTime = null;
-// speeds to cycle through on each click (radians per second)
 const SPEEDS = [0.8, 1.6, 3.0, 0.3];
 let speedIndex = 0;
-let speed = SPEEDS[0];      // the current, smoothly changing speed
+let speed = SPEEDS[0];
 const HALF = 0.16;
 const TAU = Math.PI * 2;
 
-// dust motes live in 0..1 space so they survive resizing
+// ---- lamp hum ----
+let audio = null, humGain = null, osc1 = null, osc2 = null;
+let muted = false;
+function startHum() {
+  if (audio) {
+    if (audio.state === 'suspended') audio.resume();
+    return;
+  }
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return;
+  audio = new AC();
+  humGain = audio.createGain();
+  humGain.gain.value = 0;
+  const filter = audio.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.value = 400;
+  osc1 = audio.createOscillator();
+  osc1.type = 'sine';
+  osc1.frequency.value = 100;
+  osc2 = audio.createOscillator();
+  osc2.type = 'triangle';
+  osc2.frequency.value = 200.7; // slightly off, so it beats softly
+  const g2 = audio.createGain();
+  g2.gain.value = 0.3;
+  // a slow wobble in the volume makes it feel alive
+  const lfo = audio.createOscillator();
+  lfo.frequency.value = 0.3;
+  const lfoGain = audio.createGain();
+  lfoGain.gain.value = 0.015;
+  lfo.connect(lfoGain);
+  lfoGain.connect(humGain.gain);
+  osc1.connect(filter);
+  osc2.connect(g2);
+  g2.connect(filter);
+  filter.connect(humGain);
+  humGain.connect(audio.destination);
+  osc1.start(); osc2.start(); lfo.start();
+  humGain.gain.setTargetAtTime(muted ? 0 : 0.06, audio.currentTime, 1.0);
+}
+function setMuted(m) {
+  muted = m;
+  if (audio) humGain.gain.setTargetAtTime(muted ? 0 : 0.06, audio.currentTime, 0.2);
+}
+
 const motes = [];
 for (let i = 0; i < 220; i++) {
   motes.push({
@@ -27,14 +69,15 @@ for (let i = 0; i < 220; i++) {
   });
 }
 
-// a click or tap moves to the next speed
 function nextSpeed() {
+  startHum();
   speedIndex = (speedIndex + 1) % SPEEDS.length;
-  hint.textContent = 'beam speed ' + (speedIndex + 1) + ' of ' + SPEEDS.length + ' - click again';
+  hint.textContent = 'beam speed ' + (speedIndex + 1) + ' of ' + SPEEDS.length + ' - click again (M mutes the hum)';
 }
 canvas.addEventListener('pointerdown', nextSpeed);
 window.addEventListener('keydown', function (e) {
   if (e.key === ' ' || e.key === 'Enter') nextSpeed();
+  else if (e.key === 'm' || e.key === 'M') { startHum(); setMuted(!muted); }
 });
 
 function resize() {
@@ -129,7 +172,6 @@ function updateMotes(dt, t) {
   }
 }
 
-// motes are faintly visible in the dark and sparkle when the beam finds them
 function drawMotes(cx, cy) {
   for (const m of motes) {
     const x = m.x * w, y = m.y * h;
@@ -225,10 +267,16 @@ function frame(t) {
   if (lastTime === null) lastTime = t;
   const dt = Math.min(0.1, (t - lastTime) / 1000);
   lastTime = t;
-  // ease toward the chosen speed so a click feels smooth, not jerky
   speed += (SPEEDS[speedIndex] - speed) * Math.min(1, dt * 3);
   angle = (angle + speed * dt) % TAU;
   updateMotes(dt, t);
+
+  // the hum rises a touch when the lamp turns faster
+  if (audio) {
+    const f = 95 + speed * 6;
+    osc1.frequency.setTargetAtTime(f, audio.currentTime, 0.2);
+    osc2.frequency.setTargetAtTime(f * 2.007, audio.currentTime, 0.2);
+  }
 
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.drawImage(wallLayer, 0, 0);
